@@ -1,0 +1,62 @@
+--- a/mojo/public/tools/mojom/mojom/generate/module.py	2020-06-13 02:32:55.317622389 +0800
++++ b/mojo/public/tools/mojom/mojom/generate/module.py	2020-06-13 02:32:28.505623544 +0800
+@@ -361,6 +361,9 @@
+             and (self.mojom_name, self.kind, self.ordinal, self.default,
+                  self.attributes) == (rhs.mojom_name, rhs.kind, rhs.ordinal,
+                                       rhs.default, rhs.attributes))
++  
++  def __hash__(self):
++    return id(self)
+ 
+ 
+ class StructField(Field):
+--- a/gpu/config/process_json.py	2020-06-05 02:55:43.000000000 +0800
++++ b/gpu/config/process_json.py	2020-06-13 02:42:59.496596373 +0800
+@@ -530,7 +530,7 @@
+   write_multi_gpu_style(multi_gpu_style, data_file)
+   # group driver info
+   if driver_vendor != '' or driver_version != None:
+-    if (driver_version and driver_version.has_key('schema') and
++    if (driver_version and driver_version.__contains__('schema') and
+         driver_version['schema'] == 'intel_driver'):
+       assert os_type == 'win', 'Intel driver schema is only for Windows'
+       is_intel = (format(vendor_id, '#04x') == '0x8086' or
+@@ -539,7 +539,7 @@
+                   'Intel' in driver_vendor)
+       assert is_intel, 'Intel driver schema is only for Intel GPUs'
+       valid_version = check_intel_driver_version(driver_version['value'])
+-      if driver_version.has_key('value2'):
++      if driver_version.__contains__('value2'):
+         valid_version = (valid_version and
+                          check_intel_driver_version(driver_version['value2']))
+       assert valid_version, INTEL_DRIVER_VERSION_SCHEMA
+--- a/chrome/test/chromedriver/embed_extension_in_cpp.py	2020-06-13 03:04:46.642540087 +0800
++++ b/chrome/test/chromedriver/embed_extension_in_cpp.py	2020-06-13 03:03:55.347542295 +0800
+@@ -8,7 +8,7 @@
+ import base64
+ import optparse
+ import os
+-import StringIO
++from io import BytesIO
+ import sys
+ import zipfile
+ 
+@@ -23,7 +23,7 @@
+   options, args = parser.parse_args()
+ 
+   global_string_map = {}
+-  string_buffer = StringIO.StringIO()
++  string_buffer = BytesIO()
+   zipper = zipfile.ZipFile(string_buffer, 'w')
+   for f in args:
+     zipper.write(f, os.path.basename(f), zipfile.ZIP_STORED)
+--- a/chrome/test/chromedriver/cpp_source.py	2020-06-13 13:59:08.680849446 +0800
++++ b/chrome/test/chromedriver/cpp_source.py	2020-06-13 13:17:07.051958029 +0800
+@@ -60,6 +60,7 @@
+   definitions = []
+   for name, contents in global_string_map.items():
+     lines = []
++    contents = str(contents)
+     if '\n' not in contents:
+       lines = ['    "%s"' % EscapeLine(contents)]
+     else:

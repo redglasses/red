@@ -1,0 +1,10 @@
+--- a/src/libraries/misc.h	2008-11-27 09:29:01.000000000 +0000
++++ b/src/libraries/misc.h	2020-06-08 10:30:02.867690702 +0000
+@@ -28,6 +28,7 @@
+ #ifdef HAVE_CONFIG_H
+ #include <config.h>
+ #endif
++#include <time.h>
+
+ #include "qingy_constants.h"
+ 

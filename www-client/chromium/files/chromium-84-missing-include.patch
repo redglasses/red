@@ -1,0 +1,10 @@
+--- a/mojo/public/cpp/platform/named_platform_channel_posix.cc	2020-06-13 15:23:35.311631275 +0800
++++ b/mojo/public/cpp/platform/named_platform_channel_posix.cc	2020-06-13 15:24:04.227630030 +0800
+@@ -4,6 +4,7 @@
+ 
+ #include "mojo/public/cpp/platform/named_platform_channel.h"
+ 
++#include <cstring>
+ #include <errno.h>
+ #include <sys/socket.h>
+ #include <sys/un.h>
