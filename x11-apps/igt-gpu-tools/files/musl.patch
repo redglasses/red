@@ -1,0 +1,139 @@
+diff -ur a/benchmarks/gem_syslatency.c b/benchmarks/gem_syslatency.c
+--- a/benchmarks/gem_syslatency.c	2020-06-19 16:57:14.494548862 +0800
++++ b/benchmarks/gem_syslatency.c	2020-06-19 16:50:44.966564030 +0800
+@@ -46,6 +46,18 @@
+ 
+ #define sigev_notify_thread_id _sigev_un._tid
+ 
++#ifndef __GLIBC__
++struct __igt_sigevent {
++    union sigval sigev_value;
++    int sigev_signo;
++    int sigev_notify;
++    union {
++       int _pad[64-sizeof(int) * 2 + sizeof(union sigval)];
++       int _tid;
++    } _sigev_un;
++};
++#endif
++
+ static volatile int done;
+ 
+ struct gem_busyspin {
+@@ -144,7 +156,11 @@
+ static void *sys_wait(void *arg)
+ {
+ 	struct sys_wait *w = arg;
++#ifndef __GLIBC__
++	struct __igt_sigevent sev;
++#else
+ 	struct sigevent sev;
++#endif
+ 	timer_t timer;
+ 	sigset_t mask;
+ 	struct timespec now;
+diff -ur a/lib/igt_aux.c b/lib/igt_aux.c
+--- a/lib/igt_aux.c	2020-06-19 16:57:14.525548861 +0800
++++ b/lib/igt_aux.c	2020-06-19 16:54:12.376555954 +0800
+@@ -54,6 +54,10 @@
+ #include <proc/readproc.h>
+ #include <libudev.h>
+ 
++#ifndef __GLIBC__
++#include <limits.h>
++#endif
++
+ #include "drmtest.h"
+ #include "i915_drm.h"
+ #include "intel_chipset.h"
+@@ -99,6 +103,18 @@
+ 	__igt_sigiter.stat.signals++;
+ }
+ 
++#ifndef __GLIBC__
++struct __igt_sigevent {
++    union sigval sigev_value;
++    int sigev_signo;
++    int sigev_notify;
++    union {
++       int _pad[64-sizeof(int) * 2 + sizeof(union sigval)];
++       int _tid;
++    } _sigev_un;
++};
++#endif
++
+ #if 0
+ #define SIG_ASSERT(expr) igt_assert(expr)
+ #else
+@@ -169,7 +185,11 @@
+ 
+ 	if (enable) {
+ 		struct timespec start, end;
++#ifndef __GLIBC__
++		struct __igt_sigevent sev;
++#else
+ 		struct sigevent sev;
++#endif
+ 		struct sigaction act;
+ 		struct itimerspec its;
+ 
+@@ -1446,7 +1466,11 @@
+ 
+ void igt_start_siglatency(int sig)
+ {
++#ifndef __GLIBC__
++	struct __igt_sigevent sev;
++#else
+ 	struct sigevent sev;
++#endif
+ 	struct sigaction act;
+ 
+ 	if (sig <= 0)
+diff -ur a/lib/igt_eld.c b/lib/igt_eld.c
+--- a/lib/igt_eld.c	2020-06-19 16:57:14.528548861 +0800
++++ b/lib/igt_eld.c	2020-06-19 17:00:09.837542035 +0800
+@@ -31,6 +31,9 @@
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <string.h>
++#ifndef __GLIBC__
++#include <limits.h>
++#endif
+ 
+ #include "igt_core.h"
+ #include "igt_eld.h"
+diff -ur a/lib/igt_halffloat.c b/lib/igt_halffloat.c
+--- a/lib/igt_halffloat.c	2020-06-19 16:57:14.530548861 +0800
++++ b/lib/igt_halffloat.c	2020-06-19 16:47:51.601570780 +0800
+@@ -162,7 +162,7 @@
+ 	return fi.f;
+ }
+ 
+-#if defined(__x86_64__) && !defined(__clang__)
++#if defined(__x86_64__) && !defined(__clang__) && defined(__GLIBC__)
+ #pragma GCC push_options
+ #pragma GCC target("f16c")
+ 
+diff -ur a/lib/igt_x86.c b/lib/igt_x86.c
+--- a/lib/igt_x86.c	2020-06-19 16:57:14.536548861 +0800
++++ b/lib/igt_x86.c	2020-06-19 16:55:26.925553051 +0800
+@@ -190,7 +190,7 @@
+ }
+ #endif
+ 
+-#if defined(__x86_64__) && !defined(__clang__)
++#if defined(__x86_64__) && !defined(__clang__) && defined(__GLIBC__)
+ #pragma GCC push_options
+ #pragma GCC target("sse4.1")
+ #pragma GCC diagnostic ignored "-Wpointer-arith"
+diff -ur a/meson.build b/meson.build
+--- a/meson.build	2020-06-19 16:57:14.546548860 +0800
++++ b/meson.build	2020-06-19 16:39:22.729590595 +0800
+@@ -208,6 +208,7 @@
+ if cc.has_header('sys/io.h')
+ 	config.set('HAVE_SYS_IO_H', 1)
+ endif
++config.set('SIGEV_THREAD_ID', 4)
+ if cc.links('''
+ #include <cpuid.h>
+ #include <stddef.h>
