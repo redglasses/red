@@ -1,1 +1,9 @@
 amd64	default/linux/amd64/17.0/musl/x32	dev
+amd64	libressl	dev
+arm	libressl	dev
+arm64	libressl	dev
+ppc	libressl	dev
+ppc64	libressl	dev
+s390	libressl	dev
+sparc	libressl	dev
+x86	libressl	dev

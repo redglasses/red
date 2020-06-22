@@ -1,2 +1,3 @@
 /var/db/repos/gentoo/profiles/default/linux/amd64/17.0/x32
 /var/db/repos/gentoo/profiles/default/linux/amd64/17.0/musl
+../../../../../../libressl
