@@ -1,14 +1,294 @@
---- a/src/libraries/vt.c	2008-11-25 11:21:28.000000000 +0000
-+++ b/src/libraries/vt.c	2020-06-09 07:25:05.678946360 +0000
-@@ -101,9 +101,11 @@
+diff -ur qingy-1.0.0/src/libraries/logger.c qingy-1.0.0-musl/src/libraries/logger.c
+--- qingy-1.0.0/src/libraries/logger.c	2008-11-25 00:36:35.000000000 +0800
++++ qingy-1.0.0-musl/src/libraries/logger.c	2020-06-30 02:04:55.085437194 +0800
+@@ -134,7 +134,7 @@
+ 		if (my_stderr)
+ 			fprintf(my_stderr, "%s", message);
+ 		else
+-			fprintf(stderr,    "%s", message);
++			fprintf(vtstderr,    "%s", message);
+ 	}
+ 
+ 	if (log_facilities & LOG_TO_FILE)
+@@ -207,7 +207,7 @@
+ 	my_stderr = fdopen(fd2, "w");
+ 
+ 	/* redirect stderr to our file */
+-	if (!freopen(filename, "w", stderr))
++	if (!freopen(filename, "w", vtstderr))
+ 	{
+ 		writelog(ERROR, "Unable to redirect stderr!\n");
+ 		abort();
+diff -ur qingy-1.0.0/src/libraries/misc.c qingy-1.0.0-musl/src/libraries/misc.c
+--- qingy-1.0.0/src/libraries/misc.c	2008-11-27 17:28:52.000000000 +0800
++++ qingy-1.0.0-musl/src/libraries/misc.c	2020-06-30 02:02:27.129501201 +0800
+@@ -600,7 +600,7 @@
+ 				putchar(c);
+ 		}
+ 
+-		fflush(stdout);
++		fflush(vtstdout);
+ 		(void) fclose(fd);
+ 	}
+ }
+@@ -631,21 +631,21 @@
+ 		write(1, " ", strlen(" "));
+ #endif
+ 
+-		fprintf(stdout, "login: ");
+-		fflush(stdout);
++		fprintf(vtstdout, "login: ");
++		fflush(vtstdout);
+ 
+-		if (getline(&username, &len, stdin) == -1)
++		if (getline(&username, &len, vtstdin) == -1)
+ 		{
+-			fprintf(stdout, "\nCould not read user name... aborting!\n");
+-			fflush(stdout);
++			fprintf(vtstdout, "\nCould not read user name... aborting!\n");
++			fflush(vtstdout);
+ 			sleep(3);
+ 			exit(EXIT_FAILURE);
+ 		}
+ 
+ 		if (!username)
+ 		{
+-			fprintf(stdout, "\nInvalid user name!\n\n");
+-			fflush(stdout);
++			fprintf(vtstdout, "\nInvalid user name!\n\n");
++			fflush(vtstdout);
+ 		}
+ 
+ 		if (username)
+@@ -654,8 +654,8 @@
+ 
+ 			if (len < 2)
+ 			{
+-				fprintf(stdout, "\nInvalid user name!\n\n");
+-				fflush(stdout);
++				fprintf(vtstdout, "\nInvalid user name!\n\n");
++				fflush(vtstdout);
+ 				free(username);
+ 				username=NULL;
+ 			}
+@@ -667,17 +667,17 @@
+ 		}
+ 	}
+ 
+-	fprintf(stdout, "Password: ");
+-	fflush(stdout);
++	fprintf(vtstdout, "Password: ");
++	fflush(vtstdout);
+ 
+ 	password = read_password(current_tty);
+-	fprintf(stdout, "\n");
+-	fflush(stdout);
++	fprintf(vtstdout, "\n");
++	fflush(vtstdout);
+ 
+ 	if (!check_password(username, password))
+ 	{
+-		fprintf(stdout, "\nLogin failed!\n");
+-		fflush(stdout);
++		fprintf(vtstdout, "\nLogin failed!\n");
++		fflush(vtstdout);
+ 		sleep(3);
+ 		exit(EXIT_SUCCESS);
+ 	}
+@@ -779,8 +779,8 @@
+    */
+ 	while (--countdown)
+ 	{
+-		fprintf(stdout, "%s will be restarted automatically in %d seconds\r", program_name, countdown);
+-		fflush(stdout);
++		fprintf(vtstdout, "%s will be restarted automatically in %d seconds\r", program_name, countdown);
++		fflush(vtstdout);
+ 		sleep(1);
+ 	}
+   exit(EXIT_FAILURE);
+diff -ur qingy-1.0.0/src/libraries/session.c qingy-1.0.0-musl/src/libraries/session.c
+--- qingy-1.0.0/src/libraries/session.c	2010-12-07 21:44:41.000000000 +0800
++++ qingy-1.0.0-musl/src/libraries/session.c	2020-06-30 02:00:53.816991654 +0800
+@@ -405,13 +405,13 @@
+ 
+ 	/* sent auth data to our parent... */
+ #ifdef WANT_CRYPTO
+-	encrypt_item(stdout, username);
+-	encrypt_item(stdout, password);
+-	encrypt_item(stdout, session);
++	encrypt_item(vtstdout, username);
++	encrypt_item(vtstdout, password);
++	encrypt_item(vtstdout, session);
+ #else
+-	fprintf(stdout, "%s\n%s\n%s\n", username, password, session);
++	fprintf(vtstdout, "%s\n%s\n%s\n", username, password, session);
+ #endif
+-	fflush(stdout);
++	fflush(vtstdout);
+ 
+ 	/* ...signal it to check auth data... */
+ 	if (kill (ppid, SIGUSR1))
+@@ -427,7 +427,7 @@
+ 		return -1;
+ 
+ 	/* ...finally, fetch the results */
+-	fscanf(stdin, "%9s", result);
++	fscanf(vtstdin, "%9s", result);
+ 	if (!strcmp(result, "AUTH_OK"))
+ 		return 1;
+ 
+@@ -866,9 +866,9 @@
+ 	}
+ 
+ 	/* detach from teminal */
+-	fclose(stdin);
+-	fclose(stdout);
+-	fclose(stderr);
++	fclose(vtstdin);
++	fclose(vtstdout);
++	fclose(vtstderr);
+ 
+   set_last_user(username);
+   set_last_session_tty(session, current_vt);
+@@ -1049,9 +1049,9 @@
+ #endif
+ 
+ 		/* clean up standard input, output, error */
+-		freopen("/dev/null", "r", stdin);
+-		freopen(ttyname, "w", stdout);
+-		freopen(ttyname, "w", stderr);
++		freopen("/dev/null", "r", vtstdin);
++		freopen(ttyname, "w", vtstdout);
++		freopen(ttyname, "w", vtstderr);
+ 		free(ttyname);
+ 
+ 		/* save last session for this user */
+@@ -1066,9 +1066,9 @@
+ 	}
+ 
+ 	/* detach from teminal */
+-	fclose(stdin);
+-	fclose(stdout);
+-	fclose(stderr);
++	fclose(vtstdin);
++	fclose(vtstdout);
++	fclose(vtstderr);
+ 
+   set_last_user(username);
+   set_last_session_tty(session, current_vt);
+diff -ur qingy-1.0.0/src/libraries/tty_guardian.c qingy-1.0.0-musl/src/libraries/tty_guardian.c
+--- qingy-1.0.0/src/libraries/tty_guardian.c	2008-07-08 23:04:45.000000000 +0800
++++ qingy-1.0.0-musl/src/libraries/tty_guardian.c	2020-06-30 02:03:44.282921627 +0800
+@@ -254,11 +254,11 @@
+ 		printf("%s, terminal \"/dev/tty%d\" is in use by another user.\n", intruder, our_land);
+ 	}
+ 	printf("Please supply root or tty owner password to continue.\n\nPassword: ");
+-	fflush(stdout);
++	fflush(vtstdout);
+ 
+ 	password = read_password(dest);
+ 	printf("\n\nChecking password... ");
+-	fflush(stdout);
++	fflush(vtstdout);
+ 
+ 	retval = check_password(dog_master, password);
+ 	if (!retval) retval = check_password("root", password);
+@@ -269,7 +269,7 @@
+ 
+ 	if (!retval) printf("Access denied!\n");
+ 	else         printf("Access allowed!\n");
+-	fflush(stdout);
++	fflush(vtstdout);
+ 	sleep(2);
+ 	ClearScreen();
+ 	switch_to_tty(qingy_tty);
+@@ -432,22 +432,22 @@
+ 			idle_time = get_session_idle_time(tty, &start_time, is_x_session, x_offset);
+ 			if (idle_time >= idle_timeout)
+ 			{
+-				fprintf(stderr, "This console has been idle for %d minute%s and I will now ", idle_time, (idle_time == 1) ? "" : "s");
++				fprintf(vtstderr, "This console has been idle for %d minute%s and I will now ", idle_time, (idle_time == 1) ? "" : "s");
+ 				
+ 				switch(timeout_action)
+ 				{
+ 					case ST_LOCK:
+ 					{
+-						fprintf(stderr, "lock your session...\n");
+-						fflush(stderr);
++						fprintf(vtstderr, "lock your session...\n");
++						fflush(vtstderr);
+ 						sleep(1);
+ 						bark = 1;
+ 						break;
+ 					}
+ 					case ST_LOGOUT:
+ 					{
+-						fprintf(stderr, "log out your session (pid %d)...\n", proc_id);
+-						fflush(stderr);
++						fprintf(vtstderr, "log out your session (pid %d)...\n", proc_id);
++						fflush(vtstderr);
+ 						sleep(1);
+ 
+ 						/* when X quits, it changes vt back to the tty it was started from...
+@@ -467,8 +467,8 @@
+ 							 * and that might hang the machine since two programs would be trying
+ 							 * to change the video card mode at the same time...
+ 							 */
+-							fprintf(stderr, "qingy will be restarted in 10 seconds...\n");
+-							fflush(stderr);
++							fprintf(vtstderr, "qingy will be restarted in 10 seconds...\n");
++							fflush(vtstderr);
+ 							sleep(10);
+ 							unlock_tty_switching();
+ 						}
+diff -ur qingy-1.0.0/src/libraries/vt.c qingy-1.0.0-musl/src/libraries/vt.c
+--- qingy-1.0.0/src/libraries/vt.c	2008-11-25 19:21:28.000000000 +0800
++++ qingy-1.0.0-musl/src/libraries/vt.c	2020-06-30 02:11:00.863996175 +0800
+@@ -101,11 +101,11 @@
    
    if (!ttyname) return 0;
    /* we set stdin, stdout and stderr to the new tty */
-+#ifndef _POSIX_SOURCE
-   stdin  = freopen(ttyname, "r", stdin);
-   stdout = freopen(ttyname, "w", stdout);
-   stderr = freopen(ttyname, "w", stderr);
-+#endif
+-  stdin  = freopen(ttyname, "r", stdin);
+-  stdout = freopen(ttyname, "w", stdout);
+-  stderr = freopen(ttyname, "w", stderr);
++  vtstdin  = freopen(ttyname, "r", stdin);
++  vtstdout = freopen(ttyname, "w", stdout);
++  vtstderr = freopen(ttyname, "w", stderr);
    free(ttyname);
-   if (!stdin || !stdout || !stderr) return 0;
+-  if (!stdin || !stdout || !stderr) return 0;
++  if (!vtstdin || !vtstdout || !vtstderr) return 0;
+ 
+   return 1;
+ }
+@@ -191,7 +191,7 @@
+ 
+ void stderr_disable(void)
+ {
+-	fclose(stderr);
++	fclose(vtstderr);
+ }
+ 
+ void stderr_enable(int *vt)
+@@ -205,7 +205,7 @@
+   
+   if (!ttyname) return;
+ 
+-	stderr = fopen(ttyname, "w");
++	vtstderr = fopen(ttyname, "w");
+   free(ttyname);
+ }
+ 
+diff -ur qingy-1.0.0/src/libraries/vt.h qingy-1.0.0-musl/src/libraries/vt.h
+--- qingy-1.0.0/src/libraries/vt.h	2008-11-25 19:21:43.000000000 +0800
++++ qingy-1.0.0-musl/src/libraries/vt.h	2020-06-30 01:55:19.439516315 +0800
+@@ -57,6 +57,10 @@
+ #define LED_SCRLCK 4
+ #define LED_CLOCK  8
+ 
++FILE *vtstdin;
++FILE *vtstdout;
++FILE *vtstderr;
++
+ /* change stdin, stdout and stderr to a new tty */
+ int switch_to_tty(int tty);
  
