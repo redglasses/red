@@ -1,0 +1,44 @@
+--- a/tensorflow/core/platform/default/stacktrace.h
++++ b/tensorflow/core/platform/default/stacktrace.h
+@@ -20,7 +20,7 @@
+ #include "tensorflow/core/platform/platform.h"
+ // clang-format on
+ 
+-#if !defined(IS_MOBILE_PLATFORM) && (defined(__clang__) || defined(__GNUC__))
++#if !defined(IS_MOBILE_PLATFORM) && (defined(__clang__) || defined(__GLIBC__))
+ #define TF_HAS_STACKTRACE
+ #endif
+ 
+--- a/tensorflow/core/platform/default/env.cc
++++ b/tensorflow/core/platform/default/env.cc
+@@ -139,7 +139,7 @@
+     int res = 0;
+     pthread_get_name_np(pthread_self(), buf, static_cast<size_t>(100));
+ #else
+-    int res = pthread_getname_np(pthread_self(), buf, static_cast<size_t>(100));
++    int res = 0;
+ #endif
+     if (res != 0) {
+       return false;
+--- a/tensorflow/core/platform/default/stacktrace_handler.cc
++++ b/tensorflow/core/platform/default/stacktrace_handler.cc
+@@ -16,7 +16,7 @@
+ #include "tensorflow/core/platform/platform.h"
+ 
+ #if !defined(IS_MOBILE_PLATFORM) && defined(PLATFORM_POSIX) && \
+-    (defined(__clang__) || defined(__GNUC__))
++    (defined(__clang__) || defined(__GLIBC__))
+ #define TF_GENERATE_STACKTRACE
+ #endif
+ 
+--- a/third_party/llvm/llvm.bzl
++++ b/third_party/llvm/llvm.bzl
+@@ -152,7 +152,7 @@
+ # The set of CMake variables common to all targets.
+ cmake_vars = {
+     # LLVM features
+-    "ENABLE_BACKTRACES": 1,
++    "ENABLE_BACKTRACES": 0,
+     "LLVM_BINDIR": "/dev/null",
+     "LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING": 0,
+     "LLVM_ENABLE_ABI_BREAKING_CHECKS": 0,
