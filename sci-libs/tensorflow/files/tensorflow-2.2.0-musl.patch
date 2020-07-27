@@ -51,15 +51,17 @@
      "HAVE_FCNTL_H": 1,
      "HAVE_INTTYPES_H": 1,
      "HAVE_PTHREAD_H": 1,
-@@ -202,7 +202,7 @@
+@@ -202,8 +202,8 @@
      "HAVE_ZLIB_H": 1,
  
      # Features
 -    "HAVE_BACKTRACE": 1,
+-    "BACKTRACE_HEADER": "execinfo.h",
 +    "HAVE_BACKTRACE": 0,
-     "BACKTRACE_HEADER": "execinfo.h",
++    "BACKTRACE_HEADER": "stdint.h",
      "HAVE_DLOPEN": 1,
      "HAVE_FUTIMES": 1,
+     "HAVE_GETCWD": 1,
 @@ -244,7 +244,6 @@
  linux_cmake_vars = {
      "HAVE_MALLOC_H": 1,
