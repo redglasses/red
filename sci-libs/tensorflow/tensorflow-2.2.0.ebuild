@@ -177,6 +177,10 @@ src_prepare() {
 
 	eapply "${WORKDIR}"/patches/*.patch
 
+	if use elibc_musl; then
+		eapply "${FILESDIR}"/"${P}-musl.patch"
+	fi
+
 	# Relax version checks in setup.py
 	sed -i "/^    '/s/==/>=/g" tensorflow/tools/pip_package/setup.py
 

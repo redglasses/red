@@ -1,0 +1,72 @@
+--- a/tensorflow/core/platform/default/stacktrace.h
++++ b/tensorflow/core/platform/default/stacktrace.h
+@@ -20,7 +20,7 @@
+ #include "tensorflow/core/platform/platform.h"
+ // clang-format on
+ 
+-#if !defined(IS_MOBILE_PLATFORM) && (defined(__clang__) || defined(__GNUC__))
++#if !defined(IS_MOBILE_PLATFORM) && (defined(__clang__) || defined(__GLIBC__))
+ #define TF_HAS_STACKTRACE
+ #endif
+ 
+--- a/tensorflow/core/platform/default/env.cc
++++ b/tensorflow/core/platform/default/env.cc
+@@ -139,7 +139,7 @@
+     int res = 0;
+     pthread_get_name_np(pthread_self(), buf, static_cast<size_t>(100));
+ #else
+-    int res = pthread_getname_np(pthread_self(), buf, static_cast<size_t>(100));
++    int res = 0;
+ #endif
+     if (res != 0) {
+       return false;
+--- a/tensorflow/core/platform/default/stacktrace_handler.cc
++++ b/tensorflow/core/platform/default/stacktrace_handler.cc
+@@ -16,7 +16,7 @@
+ #include "tensorflow/core/platform/platform.h"
+ 
+ #if !defined(IS_MOBILE_PLATFORM) && defined(PLATFORM_POSIX) && \
+-    (defined(__clang__) || defined(__GNUC__))
++    (defined(__clang__) || defined(__GLIBC__))
+ #define TF_GENERATE_STACKTRACE
+ #endif
+ 
+--- a/third_party/llvm/llvm.bzl
++++ b/third_party/llvm/llvm.bzl
+@@ -152,7 +152,7 @@
+ # The set of CMake variables common to all targets.
+ cmake_vars = {
+     # LLVM features
+-    "ENABLE_BACKTRACES": 1,
++    "ENABLE_BACKTRACES": 0,
+     "LLVM_BINDIR": "/dev/null",
+     "LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING": 0,
+     "LLVM_ENABLE_ABI_BREAKING_CHECKS": 0,
+@@ -184,7 +184,7 @@
+     "HAVE_DIRENT_H": 1,
+     "HAVE_DLFCN_H": 1,
+     "HAVE_ERRNO_H": 1,
+-    "HAVE_EXECINFO_H": 1,
++    "HAVE_EXECINFO_H": 0,
+     "HAVE_FCNTL_H": 1,
+     "HAVE_INTTYPES_H": 1,
+     "HAVE_PTHREAD_H": 1,
+@@ -202,8 +202,8 @@
+     "HAVE_ZLIB_H": 1,
+ 
+     # Features
+-    "HAVE_BACKTRACE": 1,
+-    "BACKTRACE_HEADER": "execinfo.h",
++    "HAVE_BACKTRACE": 0,
++    "BACKTRACE_HEADER": "stdint.h",
+     "HAVE_DLOPEN": 1,
+     "HAVE_FUTIMES": 1,
+     "HAVE_GETCWD": 1,
+@@ -244,7 +244,6 @@
+ linux_cmake_vars = {
+     "HAVE_MALLOC_H": 1,
+     "HAVE_LINK_H": 1,
+-    "HAVE_MALLINFO": 1,
+     "HAVE_FUTIMENS": 1,
+ }
+ 
