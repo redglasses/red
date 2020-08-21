@@ -1,0 +1,418 @@
+--- a/base/allocator/allocator_check.cc
++++ b/base/allocator/allocator_check.cc
+@@ -27,7 +27,7 @@ bool IsAllocatorInitialized() {
+   // Set by allocator_shim_override_ucrt_symbols_win.h when the
+   // shimmed _set_new_mode() is called.
+   return g_is_win_shim_layer_initialized;
+-#elif defined(OS_LINUX) && BUILDFLAG(USE_TCMALLOC) && \
++#elif defined(__GLIBC__) && BUILDFLAG(USE_TCMALLOC) && \
+     !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
+ // From third_party/tcmalloc/chromium/src/gperftools/tcmalloc.h.
+ // TODO(primiano): replace with an include once base can depend on allocator.
+--- a/base/process/memory_linux.cc
++++ b/base/process/memory_linux.cc
+@@ -132,9 +132,9 @@
+ #if BUILDFLAG(USE_ALLOCATOR_SHIM)
+   *result = allocator::UncheckedAlloc(size);
+ #elif defined(MEMORY_TOOL_REPLACES_ALLOCATOR) || \
+-    (!defined(LIBC_GLIBC) && !BUILDFLAG(USE_TCMALLOC))
++    (!defined(__GLIBC__) && !BUILDFLAG(USE_TCMALLOC))
+   *result = malloc(size);
+-#elif defined(LIBC_GLIBC) && !BUILDFLAG(USE_TCMALLOC)
++#elif defined(__GLIBC__) && !BUILDFLAG(USE_TCMALLOC)
+   *result = __libc_malloc(size);
+ #elif BUILDFLAG(USE_TCMALLOC)
+   *result = tc_malloc_skip_new_handler(size);
+--- a/base/debug/stack_trace.cc
++++ b/base/debug/stack_trace.cc
+@@ -225,7 +225,9 @@
+ }
+ 
+ void StackTrace::OutputToStream(std::ostream* os) const {
++#if defined(__GLIBC__) && !defined(_AIX)
+   OutputToStreamWithPrefix(os, nullptr);
++#endif
+ }
+ 
+ std::string StackTrace::ToString() const {
+@@ -233,14 +233,14 @@ std::string StackTrace::ToString() const
+ }
+ std::string StackTrace::ToStringWithPrefix(const char* prefix_string) const {
+   std::stringstream stream;
+-#if !defined(__UCLIBC__) && !defined(_AIX)
++#if defined(__GLIBC__) && !defined(_AIX)
+   OutputToStreamWithPrefix(&stream, prefix_string);
+ #endif
+   return stream.str();
+ }
+ 
+ std::ostream& operator<<(std::ostream& os, const StackTrace& s) {
+-#if !defined(__UCLIBC__) & !defined(_AIX)
++#if defined(__GLIBC__) && !defined(_AIX)
+   s.OutputToStream(&os);
+ #else
+   os << "StackTrace::OutputToStream not implemented.";
+-- a/third_party/lss/linux_syscall_support.h
++++ b/third_party/lss/linux_syscall_support.h
+@@ -139,11 +139,13 @@
+  */
+ #pragma push_macro("stat64")
+ #pragma push_macro("fstat64")
++#pragma push_macro("fstatat64")
+ #pragma push_macro("lstat64")
+ #pragma push_macro("pread64")
+ #pragma push_macro("pwrite64")
+ #undef stat64
+ #undef fstat64
++#undef fstatat64
+ #undef lstat64
+ #undef pread64
+ #undef pwrite64
+@@ -1244,6 +1246,12 @@
+ #ifndef __NR_fallocate
+ #define __NR_fallocate          285
+ #endif
++
++#undef __NR_pread
++#define __NR_pread __NR_pread64
++#undef __NR_pwrite
++#define __NR_pwrite __NR_pwrite64
++
+ /* End of x86-64 definitions                                                 */
+ #elif defined(__mips__)
+ #if _MIPS_SIM == _MIPS_SIM_ABI32
+@@ -4520,6 +4528,7 @@
+  * corresponding #pragma push_macro near the top of this file. */
+ #pragma pop_macro("stat64")
+ #pragma pop_macro("fstat64")
++#pragma pop_macro("fstatat64")
+ #pragma pop_macro("lstat64")
+ #pragma pop_macro("pread64")
+ #pragma pop_macro("pwrite64")
+--- a/third_party/breakpad/breakpad/src/client/linux/dump_writer_common/ucontext_reader.h
++++ b/third_party/breakpad/breakpad/src/client/linux/dump_writer_common/ucontext_reader.h
+@@ -37,6 +37,10 @@
+ #include "common/memory.h"
+ #include "google_breakpad/common/minidump_format.h"
+ 
++#if !defined(__GLIBC__)
++	#define _libc_fpstate _fpstate
++#endif
++
+ namespace google_breakpad {
+ 
+ // Wraps platform-dependent implementations of accessors to ucontext_t structs.
+--- a/third_party/breakpad/breakpad/src/common/linux/elf_core_dump.h
++++ b/third_party/breakpad/breakpad/src/common/linux/elf_core_dump.h
+@@ -36,6 +36,7 @@
+ #include <elf.h>
+ #include <link.h>
+ #include <stddef.h>
++#include <limits.h>
+ 
+ #include "common/memory_range.h"
+ 
+--- a/sandbox/linux/suid/process_util.h
++++ b/sandbox/linux/suid/process_util.h
+@@ -11,6 +11,14 @@
+ #include <stdbool.h>
+ #include <sys/types.h>
+ 
++// Some additional functions
++# define TEMP_FAILURE_RETRY(expression) \
++	(__extension__			\
++	 ({ long int __result;		\
++	  do __result = (long int) (expression); \
++	  while (__result == -1L && errno == EINTR); \
++	  __result; }))
++
+ // This adjusts /proc/process/oom_score_adj so the Linux OOM killer
+ // will prefer certain process types over others. The range for the
+ // adjustment is [-1000, 1000], with [0, 1000] being user accessible.
+--- a/sandbox/linux/seccomp-bpf/trap.cc	2020-04-12 08:26:40.184159217 -0400
++++ b/sandbox/linux/seccomp-bpf/trap.cc	2020-04-12 08:46:16.737191222 -0400
+@@ -174,7 +174,7 @@
+   // If the version of glibc doesn't include this information in
+   // siginfo_t (older than 2.17), we need to explicitly copy it
+   // into an arch_sigsys structure.
+-  memcpy(&sigsys, &info->_sifields, sizeof(sigsys));
++  memcpy(&sigsys, &info->__sifields, sizeof(sigsys));
+ #endif
+ 
+ #if defined(__mips__)
+diff --git a/chrome/browser/metrics/chrome_browser_main_extra_parts_metrics.cc b/chrome/browser/metrics/chrome_browser_main_extra_parts_metrics.cc
+--- a/chrome/browser/metrics/chrome_browser_main_extra_parts_metrics.cc
++++ b/chrome/browser/metrics/chrome_browser_main_extra_parts_metrics.cc
+@@ -39,7 +39,9 @@
+ #endif  // defined(OS_ANDROID) && defined(__arm__)
+ 
+ #if defined(OS_LINUX) && !defined(OS_CHROMEOS)
++#if defined(__GLIBC__)
+ #include <gnu/libc-version.h>
++#endif
+ 
+ #include "base/linux_util.h"
+ #include "base/strings/string_split.h"
+@@ -295,7 +297,7 @@ void RecordLinuxDistro() {
+ #endif  // defined(OS_LINUX) && !defined(OS_CHROMEOS)
+ 
+ void RecordLinuxGlibcVersion() {
+-#if defined(OS_LINUX) && !defined(OS_CHROMEOS)
++#if defined(__GLIBC__) && !defined(OS_CHROMEOS)
+   base::Version version(gnu_get_libc_version());
+ 
+   UMALinuxGlibcVersion glibc_version_result = UMA_LINUX_GLIBC_NOT_PARSEABLE;
+--- a/services/device/serial/serial_io_handler_posix.cc	2019-07-03 10:57:32.568171835 -0400
++++ b/services/device/serial/serial_io_handler_posix.cc	2019-07-03 10:57:16.867983031 -0400
+@@ -6,6 +6,7 @@
+ 
+ #include <sys/ioctl.h>
+ #include <termios.h>
++#include <asm-generic/ioctls.h>
+ 
+ #include <algorithm>
+ #include <utility>
+diff --git a/third_party/ots/include/opentype-sanitiser.h b/third_party/ots/include/opentype-sanitiser.h
+--- a/third_party/ots/include/opentype-sanitiser.h
++++ b/third_party/ots/include/opentype-sanitiser.h
+@@ -20,6 +20,7 @@ typedef unsigned __int64 uint64_t;
+ #define htonl(x) _byteswap_ulong (x)
+ #define htons(x) _byteswap_ushort (x)
+ #else
++#include <sys/types.h>
+ #include <arpa/inet.h>
+ #include <stdint.h>
+ #endif
+--- a/base/logging.cc
++++ b/base/logging.cc
+@@ -545,8 +545,7 @@
+ 
+ LogMessage::~LogMessage() {
+   size_t stack_start = stream_.tellp();
+-#if !defined(OFFICIAL_BUILD) && !defined(OS_NACL) && !defined(__UCLIBC__) && \
+-    !defined(OS_AIX)
++#if !defined(OFFICIAL_BUILD) && !defined(OS_NACL) && defined(__GLIBC__)
+   if (severity_ == LOG_FATAL && !base::debug::BeingDebugged()) {
+     // Include a stack trace on a fatal, unless a debugger is attached.
+     base::debug::StackTrace trace;
+--- a/third_party/blink/renderer/platform/wtf/stack_util.cc
++++ b/third_party/blink/renderer/platform/wtf/stack_util.cc
+@@ -28,7 +28,7 @@
+ // FIXME: On Mac OSX and Linux, this method cannot estimate stack size
+ // correctly for the main thread.
+ 
+-#elif defined(__GLIBC__) || defined(OS_ANDROID) || defined(OS_FREEBSD) || \
++#elif defined(OS_LINUX) || defined(OS_ANDROID) || defined(OS_FREEBSD) || \
+     defined(OS_FUCHSIA)
+   // pthread_getattr_np() can fail if the thread is not invoked by
+   // pthread_create() (e.g., the main thread of webkit_unit_tests).
+@@ -96,7 +96,7 @@
+ }
+ 
+ void* GetStackStart() {
+-#if defined(__GLIBC__) || defined(OS_ANDROID) || defined(OS_FREEBSD) || \
++#if defined(OS_LINUX) || defined(OS_ANDROID) || defined(OS_FREEBSD) || \
+     defined(OS_FUCHSIA)
+   pthread_attr_t attr;
+   int error;
+--- a/net/dns/dns_config_service_posix.cc
++++ b/net/dns/dns_config_service_posix.cc
+@@ -122,7 +122,7 @@
+   ConfigParsePosixResult result;
+   config->unhandled_options = false;
+ // TODO(fuchsia): Use res_ninit() when it's implemented on Fuchsia.
+-#if defined(OS_OPENBSD) || defined(OS_FUCHSIA)
++#if defined(OS_OPENBSD) || defined(OS_FUCHSIA) || defined(_GNU_SOURCE)
+   // Note: res_ninit in glibc always returns 0 and sets RES_INIT.
+   // res_init behaves the same way.
+   memset(&_res, 0, sizeof(_res));
+--- a/third_party/swiftshader/third_party/llvm-subzero/lib/Support/Unix/Signals.inc	2019-06-18 11:51:17.000000000 -0400
++++ b/third_party/swiftshader/third_party/llvm-subzero/lib/Support/Unix/Signals.inc	2019-07-03 12:32:50.938758186 -0400
+@@ -25,7 +25,7 @@
+ #include "llvm/Support/raw_ostream.h"
+ #include <algorithm>
+ #include <string>
+-#if HAVE_EXECINFO_H
++#if HAVE_EXECINFO_H && defined(__GLIBC__)
+ # include <execinfo.h>         // For backtrace().
+ #endif
+ #if HAVE_SIGNAL_H
+@@ -52,6 +52,7 @@
+ #include <unwind.h>
+ #else
+ #undef HAVE__UNWIND_BACKTRACE
++#undef HAVE_BACKTRACE
+ #endif
+ #endif
+ 
+--- a/third_party/nasm/nasmlib/realpath.c	2019-07-03 12:23:05.021949895 -0400
++++ b/third_party/nasm/nasmlib/realpath.c	2019-07-03 12:24:24.246862665 -0400
+@@ -49,7 +49,7 @@
+ 
+ #include "nasmlib.h"
+ 
+-#ifdef HAVE_CANONICALIZE_FILE_NAME
++#if defined(__GLIBC__)
+ 
+ /*
+  * GNU-specific, but avoids the realpath(..., NULL)
+--- a/third_party/swiftshader/third_party/llvm-7.0/configs/linux/include/llvm/Config/config.h
++++ b/third_party/swiftshader/third_party/llvm-7.0/configs/linux/include/llvm/Config/config.h
+@@ -122,8 +122,9 @@
+ /* #undef HAVE_MALLCTL */
+ 
+ /* Define to 1 if you have the `mallinfo' function. */
++#ifdef __GLIBC__
+ #define HAVE_MALLINFO 1
+-
++#endif
+ /* Define to 1 if you have the <malloc.h> header file. */
+ #define HAVE_MALLOC_H 1
+ 
+--- a/third_party/swiftshader/third_party/llvm-subzero/build/Linux/include/llvm/Config/config.h
++++ b/third_party/swiftshader/third_party/llvm-subzero/build/Linux/include/llvm/Config/config.h
+@@ -14,7 +14,7 @@
+ #define ENABLE_CRASH_OVERRIDES 1
+ 
+ /* Define to 1 if you have the `backtrace' function. */
+-#define HAVE_BACKTRACE 1
++/* #define HAVE_BACKTRACE 0 */
+ 
+ /* Define to 1 if you have the <CrashReporterClient.h> header file. */
+ /* #undef HAVE_CRASHREPORTERCLIENT_H */
+@@ -55,7 +55,7 @@
+ #define HAVE_ERRNO_H 1
+ 
+ /* Define to 1 if you have the <execinfo.h> header file. */
+-#define HAVE_EXECINFO_H 1
++#define HAVE_EXECINFO_H 0
+ 
+ /* Define to 1 if you have the <fcntl.h> header file. */
+ #define HAVE_FCNTL_H 1
+@@ -130,7 +130,7 @@
+ /* #undef HAVE_MALLCTL */
+ 
+ /* Define to 1 if you have the `mallinfo' function. */
+-#define HAVE_MALLINFO 1
++/* #define HAVE_MALLINFO 0 */
+ 
+ /* Define to 1 if you have the <malloc.h> header file. */
+ #define HAVE_MALLOC_H 1
+--- a/base/allocator/allocator_shim_override_glibc_weak_symbols.h	2020-06-14 01:47:39.936018894 +0800
++++ b/base/allocator/allocator_shim_override_glibc_weak_symbols.h	2020-06-14 01:47:52.804018340 +0800
+@@ -111,9 +111,3 @@
+ }
+ 
+ }  // extern "C"
+-
+-// Safety check.
+-#if !defined(__GLIBC__)
+-#error The target platform does not seem to use Glibc. Disable the allocator \
+-shim by setting use_allocator_shim=false in GN args.
+-#endif
+--- a/third_party/crashpad/crashpad/util/linux/thread_info.h
++++ b/third_party/crashpad/crashpad/util/linux/thread_info.h
+@@ -273,7 +273,7 @@ union FloatContext {
+                 "Size mismatch");
+ #elif defined(ARCH_CPU_ARMEL)
+   static_assert(sizeof(f32_t::fpregs) == sizeof(user_fpregs), "Size mismatch");
+-#if !defined(__GLIBC__)
++#if !defined(__linux__)
+   static_assert(sizeof(f32_t::vfp) == sizeof(user_vfp), "Size mismatch");
+ #endif
+ #elif defined(ARCH_CPU_ARM64)
+--- a/net/socket/udp_socket_posix.cc
++++ b/net/socket/udp_socket_posix.cc
+@@ -1193,8 +1193,12 @@ SendResult UDPSocketPosixSender::Interna
+   for (auto& buffer : buffers)
+     msg_iov->push_back({const_cast<char*>(buffer->data()), buffer->length()});
+   msgvec->reserve(buffers.size());
+-  for (size_t j = 0; j < buffers.size(); j++)
+-    msgvec->push_back({{nullptr, 0, &msg_iov[j], 1, nullptr, 0, 0}, 0});
++  for (size_t j = 0; j < buffers.size(); j++) {
++    struct msghdr m = {0};
++    m.msg_iov = &msg_iov[j];
++    m.msg_iovlen = 1;
++    msgvec->push_back({m, 0});
++  }
+   int result = HANDLE_EINTR(Sendmmsg(fd, &msgvec[0], buffers.size(), 0));
+   SendResult send_result(0, 0, std::move(buffers));
+   if (result < 0) {
+--- a/net/dns/dns_reloader.cc
++++ b/net/dns/dns_reloader.cc
+@@ -17,6 +17,36 @@
+ #include "base/threading/thread_local.h"
+ #include "net/base/network_change_notifier.h"
+ 
++#if !defined(__GLIBC__)
++/***************************************************************************
++ * resolv_compat.h
++ *
++ * Mimick GLIBC's res_ninit() and res_nclose() for musl libc
++ * Note: res_init() is actually deprecated according to
++ * http://docs.oracle.com/cd/E36784_01/html/E36875/res-nclose-3resolv.html
++ **************************************************************************/
++#include <string.h>
++
++static inline int res_ninit(res_state statp)
++{
++	int rc = res_init();
++	if (statp != &_res) {
++		memcpy(statp, &_res, sizeof(*statp));
++	}
++	return rc;
++}
++
++static inline int res_nclose(res_state statp)
++{
++	if (!statp)
++		return -1;
++	if (statp != &_res) {
++		memset(statp, 0, sizeof(*statp));
++	}
++	return 0;
++}
++#endif
++
+ namespace net {
+ 
+ namespace {
+--- a/net/dns/dns_config_service_posix.cc
++++ b/net/dns/dns_config_service_posix.cc
+@@ -42,6 +42,36 @@
+ #include "net/base/network_interfaces.h"
+ #endif
+ 
++#if !defined(__GLIBC__)
++/***************************************************************************
++ * resolv_compat.h
++ *
++ * Mimick GLIBC's res_ninit() and res_nclose() for musl libc
++ * Note: res_init() is actually deprecated according to
++ * http://docs.oracle.com/cd/E36784_01/html/E36875/res-nclose-3resolv.html
++ **************************************************************************/
++#include <string.h>
++
++static inline int res_ninit(res_state statp)
++{
++	int rc = res_init();
++	if (statp != &_res) {
++		memcpy(statp, &_res, sizeof(*statp));
++	}
++	return rc;
++}
++
++static inline int res_nclose(res_state statp)
++{
++	if (!statp)
++		return -1;
++	if (statp != &_res) {
++		memset(statp, 0, sizeof(*statp));
++	}
++	return 0;
++}
++#endif
++
+ namespace net {
+ 
+ namespace internal { 
