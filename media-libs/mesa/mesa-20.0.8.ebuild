@@ -249,6 +249,7 @@ x86? (
 PATCHES=(
 	"${FILESDIR}"/${PN}-19.3.0-add-disable-tls-support.patch
 	"${FILESDIR}"/${P}-pthread.patch
+	"${FILESDIR}"/${P}-panfrost.patch
 )
 
 llvm_check_deps() {

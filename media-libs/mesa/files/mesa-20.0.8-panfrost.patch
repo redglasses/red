@@ -1,0 +1,10 @@
+--- a/src/gallium/drivers/panfrost/pan_bo.h
++++ b/src/gallium/drivers/panfrost/pan_bo.h
+@@ -27,6 +27,7 @@
+ #define __PAN_BO_H__
+ 
+ #include <panfrost-misc.h>
++#include <time.h>
+ #include "pipe/p_state.h"
+ #include "util/list.h"
+ 
