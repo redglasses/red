@@ -256,19 +256,6 @@ diff --git a/third_party/ots/include/opentype-sanitiser.h b/third_party/ots/incl
  
  /*
   * GNU-specific, but avoids the realpath(..., NULL)
---- a/third_party/swiftshader/third_party/llvm-7.0/configs/linux/include/llvm/Config/config.h
-+++ b/third_party/swiftshader/third_party/llvm-7.0/configs/linux/include/llvm/Config/config.h
-@@ -122,8 +122,9 @@
- /* #undef HAVE_MALLCTL */
- 
- /* Define to 1 if you have the `mallinfo' function. */
-+#ifdef __GLIBC__
- #define HAVE_MALLINFO 1
--
-+#endif
- /* Define to 1 if you have the <malloc.h> header file. */
- #define HAVE_MALLOC_H 1
- 
 --- a/third_party/swiftshader/third_party/llvm-subzero/build/Linux/include/llvm/Config/config.h
 +++ b/third_party/swiftshader/third_party/llvm-subzero/build/Linux/include/llvm/Config/config.h
 @@ -14,7 +14,7 @@
