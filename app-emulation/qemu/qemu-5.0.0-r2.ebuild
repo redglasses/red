@@ -3,7 +3,7 @@
 
 EAPI="7"
 
-PYTHON_COMPAT=( python{3_6,3_7} )
+PYTHON_COMPAT=( python{3_6,3_7,3_8} )
 PYTHON_REQ_USE="ncurses,readline"
 
 PLOCALES="bg de_DE fr_FR hu it tr zh_CN"
@@ -16,16 +16,14 @@ inherit eutils linux-info toolchain-funcs multilib python-r1 \
 if [[ ${PV} = *9999* ]]; then
 	EGIT_REPO_URI="https://git.qemu.org/git/qemu.git"
 	EGIT_SUBMODULES=(
-		slirp
 		tests/fp/berkeley-{test,soft}float-3
 		ui/keycodemapdb
 	)
 	inherit git-r3
 	SRC_URI=""
 else
-	SRC_URI="https://download.qemu.org/${P}.tar.xz
-		https://dev.gentoo.org/~tamiko/distfiles/${P}-patches-r1.tar.xz"
-	KEYWORDS="~amd64 ~arm64 ~ppc ~ppc64 ~x86"
+	SRC_URI="https://download.qemu.org/${P}.tar.xz"
+	KEYWORDS="amd64 arm64 ~ppc ~ppc64 x86"
 fi
 
 DESCRIPTION="QEMU + Kernel-based Virtual Machine userland tools"
@@ -35,18 +33,21 @@ LICENSE="GPL-2 LGPL-2 BSD-2"
 SLOT="0"
 
 IUSE="accessibility +aio alsa bzip2 capstone +caps +curl debug doc
-	+fdt glusterfs gnutls gtk infiniband iscsi jemalloc +jpeg kernel_linux
-	kernel_FreeBSD lzo ncurses nfs nls numa opengl +oss +pin-upstream-blobs
+	+fdt glusterfs gnutls gtk infiniband iscsi io-uring
+	jemalloc +jpeg kernel_linux
+	kernel_FreeBSD lzo multipath
+	ncurses nfs nls numa opengl +oss +pin-upstream-blobs
 	plugins +png pulseaudio python rbd sasl +seccomp sdl sdl-image selinux
+	+slirp
 	smartcard snappy spice ssh static static-user systemtap tci test usb
 	usbredir vde +vhost-net vhost-user-fs virgl virtfs +vnc vte xattr xen
-	xfs +xkb"
+	xfs +xkb zstd"
 
 COMMON_TARGETS="aarch64 alpha arm cris hppa i386 m68k microblaze microblazeel
 	mips mips64 mips64el mipsel nios2 or1k ppc ppc64 riscv32 riscv64 s390x
 	sh4 sh4eb sparc sparc64 x86_64 xtensa xtensaeb"
 IUSE_SOFTMMU_TARGETS="${COMMON_TARGETS}
-	lm32 moxie tricore unicore32"
+	lm32 moxie rx tricore unicore32"
 IUSE_USER_TARGETS="${COMMON_TARGETS}
 	aarch64_be armeb mipsn32 mipsn32el ppc64abi32 ppc64le sparc32plus
 	tilegx"
@@ -68,7 +69,7 @@ REQUIRED_USE="${PYTHON_REQUIRED_USE}
 	qemu_softmmu_targets_riscv64? ( fdt )
 	static? ( static-user !alsa !gtk !opengl !pulseaudio !plugins !rbd !snappy )
 	static-user? ( !plugins )
-	virtfs? ( xattr )
+	virtfs? ( caps xattr )
 	vte? ( gtk )
 	plugins? ( !static !static-user )
 "
@@ -120,9 +121,11 @@ SOFTMMU_TOOLS_DEPEND="
 		sys-fabric/librdmacm:=[static-libs(+)]
 	)
 	iscsi? ( net-libs/libiscsi )
+	io-uring? ( sys-libs/liburing[static-libs(+)] )
 	jemalloc? ( dev-libs/jemalloc )
 	jpeg? ( virtual/jpeg:0=[static-libs(+)] )
 	lzo? ( dev-libs/lzo:2[static-libs(+)] )
+	multipath? ( sys-fs/multipath-tools )
 	ncurses? (
 		sys-libs/ncurses:0=[unicode]
 		sys-libs/ncurses:0=[static-libs(+)]
@@ -140,11 +143,12 @@ SOFTMMU_TOOLS_DEPEND="
 	rbd? ( sys-cluster/ceph )
 	sasl? ( dev-libs/cyrus-sasl[static-libs(+)] )
 	sdl? (
-		media-libs/libsdl2[X]
+		media-libs/libsdl2[video]
 		media-libs/libsdl2[static-libs(+)]
 	)
 	sdl-image? ( media-libs/sdl2-image[static-libs(+)] )
 	seccomp? ( >=sys-libs/libseccomp-2.1.0[static-libs(+)] )
+	slirp? ( net-libs/libslirp[static-libs(+)] )
 	smartcard? ( >=app-emulation/libcacard-2.5.0[static-libs(+)] )
 	snappy? ( app-arch/snappy:= )
 	spice? (
@@ -158,7 +162,9 @@ SOFTMMU_TOOLS_DEPEND="
 	virgl? ( media-libs/virglrenderer[static-libs(+)] )
 	virtfs? ( sys-libs/libcap )
 	xen? ( app-emulation/xen-tools:= )
-	xfs? ( sys-fs/xfsprogs[static-libs(+)] )"
+	xfs? ( sys-fs/xfsprogs[static-libs(+)] )
+	zstd? ( >=app-arch/zstd-1.4.0[static-libs(+)] )
+"
 
 X86_FIRMWARE_DEPEND="
 	pin-upstream-blobs? (
@@ -215,16 +221,16 @@ RDEPEND="${CDEPEND}
 	selinux? ( sec-policy/selinux-qemu )"
 
 PATCHES=(
-	"${FILESDIR}"/${PN}-2.5.0-cflags.patch
-	"${FILESDIR}"/${PN}-2.5.0-sysmacros.patch
 	"${FILESDIR}"/${PN}-2.11.1-capstone_include_path.patch
-	"${FILESDIR}"/${PN}-4.0.0-sanitize-interp_info.patch
 	"${FILESDIR}"/${PN}-4.0.0-mkdir_systemtap.patch #684902
-	"${WORKDIR}"/patches
+	"${FILESDIR}"/${PN}-4.2.0-cflags.patch
 	"${FILESDIR}"/${PN}-4.2.0-r2-musl.patch
 	"${FILESDIR}"/${PN}-4.2.0-r2-musl-F_SHLCK-and-F_EXLCK.patch
 	"${FILESDIR}"/${PN}-4.2.0-r2-musl-fix-sigevent-and-sigval_t.patch
 	"${FILESDIR}"/${PN}-4.2.0-r2-musl-linux-user-signal.c-define-__SIGRTMIN-MAX-for-non-GN.patch
+	"${FILESDIR}"/${PN}-5.0.0-epoll-strace.patch
+	"${FILESDIR}"/${PN}-5.0.0-ipv6-slirp-CVE-2020-10756.patch #731992
+	"${FILESDIR}"/${PN}-5.0.0-fix-proc-myself-for-musl.patch
 )
 
 QA_PREBUILT="
@@ -283,7 +289,7 @@ For systemd:
 
 pkg_pretend() {
 	if use kernel_linux && kernel_is lt 2 6 25; then
-		eerror "This version of KVM requres a host kernel of 2.6.25 or higher."
+		eerror "This version of KVM requires a host kernel of 2.6.25 or higher."
 	elif use kernel_linux; then
 		if ! linux_config_exists; then
 			eerror "Unable to check your kernel for KVM support"
@@ -378,7 +384,7 @@ src_prepare() {
 	default
 
 	# Use correct toolchain to fix cross-compiling
-	tc-export AR LD NM OBJCOPY PKG_CONFIG
+	tc-export AR AS LD NM OBJCOPY PKG_CONFIG RANLIB
 	export WINDRES=${CHOST}-windres
 
 	# Verbose builds
@@ -414,6 +420,7 @@ qemu_src_configure() {
 		--with-confsuffix=/qemu
 		--localstatedir=/var
 		--disable-bsd-user
+		--disable-containers # bug #732972
 		--disable-guest-agent
 		--disable-strip
 		--disable-werror
@@ -444,7 +451,6 @@ qemu_src_configure() {
 		fi
 	}
 	conf_opts+=(
-		--disable-bluez
 		$(conf_notuser accessibility brlapi)
 		$(conf_notuser aio linux-aio)
 		$(conf_notuser bzip2)
@@ -458,10 +464,12 @@ qemu_src_configure() {
 		$(conf_notuser gtk)
 		$(conf_notuser infiniband rdma)
 		$(conf_notuser iscsi libiscsi)
+		$(conf_notuser io-uring linux-io-uring)
 		$(conf_notuser jemalloc jemalloc)
 		$(conf_notuser jpeg vnc-jpeg)
 		$(conf_notuser kernel_linux kvm)
 		$(conf_notuser lzo)
+		$(conf_notuser multipath mpath)
 		$(conf_notuser ncurses curses)
 		$(conf_notuser nfs libnfs)
 		$(conf_notuser numa)
@@ -472,6 +480,7 @@ qemu_src_configure() {
 		$(conf_notuser sdl)
 		$(conf_notuser sdl-image)
 		$(conf_notuser seccomp)
+		$(conf_notuser slirp slirp system)
 		$(conf_notuser smartcard)
 		$(conf_notuser snappy)
 		$(conf_notuser spice)
@@ -489,6 +498,7 @@ qemu_src_configure() {
 		$(conf_notuser xen xen-pci-passthrough)
 		$(conf_notuser xfs xfsctl)
 		$(conf_notuser xkb xkbcommon)
+		$(conf_notuser zstd)
 	)
 
 	if [[ ${buildtype} == "user" ]] ; then
@@ -500,10 +510,12 @@ qemu_src_configure() {
 	if [[ ! ${buildtype} == "user" ]] ; then
 		# audio options
 		local audio_opts=(
+			# Note: backend order matters here: #716202
+			# We iterate from higher-level to lower level.
+			$(usex pulseaudio pa "")
+			$(usev sdl)
 			$(usev alsa)
 			$(usev oss)
-			$(usev sdl)
-			$(usex pulseaudio pa "")
 		)
 		conf_opts+=(
 			--audio-drv-list=$(printf "%s," "${audio_opts[@]}")
@@ -613,8 +625,7 @@ src_test() {
 	if [[ -n ${softmmu_targets} ]]; then
 		cd "${S}/softmmu-build"
 		pax-mark m */qemu-system-* #515550
-		emake -j1 check
-		emake -j1 check-report.html
+		emake check
 	fi
 }
 
