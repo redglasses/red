@@ -1,0 +1,22 @@
+--- a/vendor/github.com/10gen/openssl/shim.c
++++ b/vendor/github.com/10gen/openssl/shim.c
+@@ -162,7 +162,7 @@
+ }
+ 
+ int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CIPHER *enc, unsigned char *kstr, int klen, pem_password_cb *cb, void *u) {
+-	return PEM_write_bio_PrivateKey_traditional(bio, key, enc, kstr, klen, cb, u);
++	return 0;
+ }
+ 
+ #endif
+--- a/vendor/github.com/10gen/openssl/shim.h
++++ b/vendor/github.com/10gen/openssl/shim.h
+@@ -174,7 +174,7 @@
+ extern X509 *X_sk_X509_value(STACK_OF(X509)* sk, int i);
+ 
+ /* PEM methods */
+-extern int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CIPHER *enc, unsigned char *kstr, int klen, pem_password_cb *cb, void *u);
++int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CIPHER *enc, unsigned char *kstr, int klen, pem_password_cb *cb, void *u);
+ 
+ /* FIPS methods */
+ extern int X_FIPS_mode(void);
