@@ -239,7 +239,6 @@ src_prepare() {
 		eapply "${FILESDIR}/chromium-84-missing-include.patch"
 		eapply "${FILESDIR}/chromium-85-musl-fixes.patch"
 		eapply "${FILESDIR}/chromium-84-musl-sandbox.patch"
-		#eapply "${FILESDIR}/chromium-84-python3-fixes.patch"
 	fi
 
 	default

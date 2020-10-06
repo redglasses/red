@@ -403,3 +403,14 @@ diff --git a/third_party/ots/include/opentype-sanitiser.h b/third_party/ots/incl
  namespace net {
  
  namespace internal { 
+--- a/third_party/swiftshader/third_party/llvm-10.0/configs/linux/include/llvm/Config/config.h
++++ b/third_party/swiftshader/third_party/llvm-10.0/configs/linux/include/llvm/Config/config.h
+@@ -125,7 +125,7 @@
+ /* #undef HAVE_MALLCTL */
+ 
+ /* Define to 1 if you have the `mallinfo' function. */
+-#define HAVE_MALLINFO 1
++/* #undef HAVE_MALLINFO */
+ 
+ /* Define to 1 if you have the <malloc/malloc.h> header file. */
+ /* #undef HAVE_MALLOC_MALLOC_H */
