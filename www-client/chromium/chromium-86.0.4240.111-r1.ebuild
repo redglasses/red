@@ -12,7 +12,7 @@ inherit check-reqs chromium-2 desktop flag-o-matic multilib ninja-utils pax-util
 
 DESCRIPTION="Open-source version of Google Chrome web browser"
 HOMEPAGE="https://chromium.org/"
-PATCHSET="2"
+PATCHSET="7"
 PATCHSET_NAME="chromium-$(ver_cut 1)-patchset-${PATCHSET}"
 SRC_URI="https://commondatastorage.googleapis.com/chromium-browser-official/${P}.tar.xz
 	https://files.pythonhosted.org/packages/ed/7b/bbf89ca71e722b7f9464ebffe4b5ee20a9e5c9a555a56e2d3914bb9119a6/setuptools-44.1.0.zip
@@ -20,12 +20,13 @@ SRC_URI="https://commondatastorage.googleapis.com/chromium-browser-official/${P}
 
 LICENSE="BSD"
 SLOT="0"
-KEYWORDS="amd64 arm64 ~x86"
-IUSE="component-build cups cpu_flags_arm_neon +hangouts headless +js-type-check kerberos ozone pic +proprietary-codecs pulseaudio selinux +suid +system-ffmpeg +system-icu +system-libvpx +tcmalloc wayland widevine"
+KEYWORDS="~amd64 ~arm64 ~x86"
+IUSE="component-build cups cpu_flags_arm_neon +hangouts headless +js-type-check kerberos official ozone ozone-wayland pic +proprietary-codecs pulseaudio selinux +suid +system-ffmpeg +system-icu +system-libvpx +tcmalloc widevine"
 RESTRICT="!system-ffmpeg? ( proprietary-codecs? ( bindist ) )"
 REQUIRED_USE="
 	component-build? ( !suid )
-	wayland? ( ozone )
+	headless? ( ozone )
+	ozone-wayland? ( ozone )
 "
 
 COMMON_X_DEPEND="
@@ -58,10 +59,10 @@ COMMON_DEPEND="
 	>=media-libs/harfbuzz-2.4.0:0=[icu(-)]
 	media-libs/libjpeg-turbo:=
 	media-libs/libpng:=
-	system-libvpx? ( >=media-libs/libvpx-1.8.2:=[postproc,svc] )
+	system-libvpx? ( >=media-libs/libvpx-1.8.2:=[postproc] )
 	pulseaudio? ( media-sound/pulseaudio:= )
 	system-ffmpeg? (
-		>=media-video/ffmpeg-4:=
+		>=media-video/ffmpeg-4.3:=
 		|| (
 			media-video/ffmpeg[-samba]
 			>=net-fs/samba-4.5.10-r1[-debug(-)]
@@ -81,11 +82,12 @@ COMMON_DEPEND="
 	ozone? (
 		!headless? (
 			${COMMON_X_DEPEND}
-			x11-libs/gtk+:3[wayland?,X]
-			wayland? (
+			x11-libs/gtk+:3[X]
+			ozone-wayland? (
 				dev-libs/wayland:=
 				dev-libs/libffi:=
 				x11-libs/libdrm:=
+				x11-libs/gtk+:3[wayland,X]
 				x11-libs/libxkbcommon:=
 			)
 		)
@@ -114,7 +116,7 @@ BDEPEND="
 	>=app-arch/gzip-1.7
 	app-arch/unzip
 	dev-lang/perl
-	>=dev-util/gn-0.1726
+	>=dev-util/gn-0.1807
 	dev-vcs/git
 	>=dev-util/gperf-3.0.3
 	>=dev-util/ninja-1.7.2
@@ -130,12 +132,12 @@ BDEPEND="
 : ${CHROMIUM_FORCE_LIBCXX=no}
 
 if [[ ${CHROMIUM_FORCE_CLANG} == yes ]]; then
-	BDEPEND+=" >=sys-devel/clang-9"
+	BDEPEND+=" >=sys-devel/clang-10"
 fi
 
 if [[ ${CHROMIUM_FORCE_LIBCXX} == yes ]]; then
-	RDEPEND+=" >=sys-libs/libcxx-9"
-	DEPEND+=" >=sys-libs/libcxx-9"
+	RDEPEND+=" >=sys-libs/libcxx-10"
+	DEPEND+=" >=sys-libs/libcxx-10"
 else
 	COMMON_DEPEND="
 		app-arch/snappy:=
@@ -181,10 +183,6 @@ them in Chromium, then add --password-store=basic to CHROMIUM_FLAGS
 in /etc/chromium/default.
 "
 
-PATCHES=(
-	"${FILESDIR}/chromium-84-mediaalloc.patch"
-)
-
 pre_build_checks() {
 	if [[ ${MERGE_TYPE} != binary ]]; then
 		local -x CPP="$(tc-getCXX) -E"
@@ -224,21 +222,31 @@ pkg_setup() {
 	pre_build_checks
 
 	chromium_suid_sandbox_check_kernel_config
+
+	# nvidia-drivers does not work correctly with Ozone due to unsupported EGLStreams
+	if use ozone && ! use headless && has_version "x11-drivers/nvidia-drivers"; then
+		ewarn "Proprietary nVidia driver does not work correctly with Ozone. You might be"
+		ewarn "able to work around this problem by using SwiftShader OpenGL implementation."
+		ewarn "Add --use-gl=swiftshader to CHROMIUM_FLAGS in /etc/chromium/default to force SwiftShader."
+	fi
 }
 
 src_prepare() {
 	# Calling this here supports resumption via FEATURES=keepwork
 	python_setup
 
-	eapply "${WORKDIR}/patches"
+	local PATCHES=(
+		"${WORKDIR}/patches"
+		"${FILESDIR}/chromium-87-xproto-crash.patch"
+	)
 
 	if use elibc_musl; then
 		eapply "${FILESDIR}/chromium-84-no-mallinfo.patch"
 		eapply "${FILESDIR}/chromium-84-no-execinfo.patch"
 		eapply "${FILESDIR}/chromium-84-no-sys-cdefs.patch"
 		eapply "${FILESDIR}/chromium-84-missing-include.patch"
-		eapply "${FILESDIR}/chromium-85-musl-fixes.patch"
-		eapply "${FILESDIR}/chromium-84-musl-sandbox.patch"
+		eapply "${FILESDIR}/chromium-86-musl-fixes.patch"
+		#eapply "${FILESDIR}/chromium-84-musl-sandbox.patch"
 	fi
 
 	default
@@ -289,7 +297,6 @@ src_prepare() {
 		third_party/breakpad
 		third_party/breakpad/breakpad/src/third_party/curl
 		third_party/brotli
-		third_party/cacheinvalidation
 		third_party/catapult
 		third_party/catapult/common/py_vulcanize/third_party/rcssmin
 		third_party/catapult/common/py_vulcanize/third_party/rjsmin
@@ -318,9 +325,15 @@ src_prepare() {
 		third_party/devscripts
 		third_party/devtools-frontend
 		third_party/devtools-frontend/src/front_end/third_party/acorn
+		third_party/devtools-frontend/src/front_end/third_party/chromium
 		third_party/devtools-frontend/src/front_end/third_party/codemirror
 		third_party/devtools-frontend/src/front_end/third_party/fabricjs
+		third_party/devtools-frontend/src/front_end/third_party/i18n
+		third_party/devtools-frontend/src/front_end/third_party/intl-messageformat
 		third_party/devtools-frontend/src/front_end/third_party/lighthouse
+		third_party/devtools-frontend/src/front_end/third_party/lit-html
+		third_party/devtools-frontend/src/front_end/third_party/lodash-isequal
+		third_party/devtools-frontend/src/front_end/third_party/marked
 		third_party/devtools-frontend/src/front_end/third_party/wasmparser
 		third_party/devtools-frontend/src/third_party
 		third_party/dom_distiller_js
@@ -367,6 +380,7 @@ src_prepare() {
 		third_party/metrics_proto
 		third_party/modp_b64
 		third_party/nasm
+		third_party/nearby
 		third_party/node
 		third_party/node/node_modules/polymer-bundler/lib/third_party/UglifyJS2
 		third_party/one_euro_filter
@@ -397,6 +411,7 @@ src_prepare() {
 		third_party/rnnoise
 		third_party/s2cellid
 		third_party/schema_org
+		third_party/securemessage
 		third_party/simplejson
 		third_party/skia
 		third_party/skia/include/third_party/skcms
@@ -413,6 +428,7 @@ src_prepare() {
 		third_party/swiftshader/third_party/marl
 		third_party/swiftshader/third_party/subzero
 		third_party/swiftshader/third_party/SPIRV-Headers/include/spirv/unified1
+		third_party/ukey2
 		third_party/unrar
 		third_party/usrsctp
 		third_party/vulkan
@@ -430,6 +446,7 @@ src_prepare() {
 		third_party/woff2
 		third_party/wuffs
 		third_party/xcbproto
+		third_party/zxcvbn-cpp
 		third_party/zlib/google
 		tools/grit/third_party/six
 		url/third_party/mozilla
@@ -471,7 +488,7 @@ src_prepare() {
 			eapply "${FILESDIR}/chromium-84-musl-tcmalloc.patch"
 		fi
 	fi
-	if use ozone && use wayland && ! use headless ; then
+	if use ozone && use ozone-wayland && ! use headless ; then
 		keeplibs+=( third_party/wayland )
 	fi
 	if [[ ${CHROMIUM_FORCE_LIBCXX} == yes ]]; then
@@ -485,7 +502,7 @@ src_prepare() {
 		fi
 	fi
 	if use arm64 || use ppc64 ; then
-	        keeplibs+=( third_party/swiftshader/third_party/llvm-10.0 )
+		keeplibs+=( third_party/swiftshader/third_party/llvm-10.0 )
 	fi
 	# Remove most bundled libraries. Some are still needed.
 	build/linux/unbundle/remove_bundled_libraries.py "${keeplibs[@]}" --do-remove || die
@@ -715,10 +732,10 @@ src_configure() {
 		myconf_gn+=" ozone_platform_headless=true"
 		if ! use headless; then
 			myconf_gn+=" use_system_libdrm=true"
-			myconf_gn+=" ozone_platform_wayland=$(usex wayland true false)"
+			myconf_gn+=" ozone_platform_wayland=$(usex ozone-wayland true false)"
 			myconf_gn+=" ozone_platform_x11=true"
 			myconf_gn+=" ozone_platform_headless=true"
-			if use wayland; then
+			if use ozone-wayland; then
 				myconf_gn+=" use_system_minigbm=true use_xkbcommon=true"
 				myconf_gn+=" ozone_platform=\"wayland\""
 			else
@@ -727,6 +744,16 @@ src_configure() {
 		else
 			myconf_gn+=" ozone_platform=\"headless\""
 		fi
+	fi
+
+	# Enable official builds
+	myconf_gn+=" is_official_build=$(usex official true false)"
+	if use official; then
+		# Allow building against system libraries in official builds
+		sed -i 's/OFFICIAL_BUILD/GOOGLE_CHROME_BUILD/' \
+			tools/generate_shim_headers/generate_shim_headers.py || die
+		# Disable CFI: unsupported for GCC, requires clang+lto+lld
+		myconf_gn+=" is_cfi=false"
 	fi
 
 	einfo "Configuring Chromium..."
@@ -794,7 +821,7 @@ src_install() {
 	doexe out/Release/chromedriver
 
 	ozone_auto_session () {
-		use ozone && use wayland && ! use headless && echo true || echo false
+		use ozone && use ozone-wayland && ! use headless && echo true || echo false
 	}
 	local sedargs=( -e
 			"s:/usr/lib/:/usr/$(get_libdir)/:g;
